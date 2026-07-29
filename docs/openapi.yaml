@@ -1,0 +1,325 @@
+openapi: 3.0.3
+info:
+  title: Tool Rental Marketplace API
+  version: 1.0.0
+  description: |
+    API-first contract for the peer-to-peer power-tool rental marketplace.
+    Rental periods are half-open: [start_date, end_date). The start date is
+    included and the end date is the return date. PENDING and APPROVED
+    bookings block availability.
+servers:
+  - url: http://localhost:3000
+    description: Local development
+  - url: https://your-production-domain.example.com
+    description: Production placeholder
+tags:
+  - name: Tools
+    description: Browse and manage tool listings
+  - name: Bookings
+    description: Create and manage rental requests
+paths:
+  /api/tools:
+    get:
+      tags: [Tools]
+      summary: List active tools
+      operationId: listTools
+      parameters:
+        - name: category
+          in: query
+          schema: { type: string }
+        - name: location
+          in: query
+          schema: { type: string }
+      responses:
+        '200':
+          description: Active tool listings.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Tool' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    post:
+      tags: [Tools]
+      summary: Create a tool listing
+      operationId: createTool
+      security: [{ supabaseAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateToolRequest' }
+      responses:
+        '201':
+          description: Tool listing created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Tool' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/tools/{toolId}:
+    parameters:
+      - $ref: '#/components/parameters/ToolId'
+    get:
+      tags: [Tools]
+      summary: Get a tool by ID
+      operationId: getTool
+      responses:
+        '200':
+          description: Tool details and owner summary.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/ToolDetails' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '500': { $ref: '#/components/responses/ServerError' }
+    patch:
+      tags: [Tools]
+      summary: Update a tool listing
+      operationId: updateTool
+      security: [{ supabaseAuth: [] }]
+      description: Only the tool owner may update the listing or its status.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UpdateToolRequest' }
+      responses:
+        '200':
+          description: Tool listing updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Tool' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+  /api/bookings:
+    post:
+      tags: [Bookings]
+      summary: Create a booking request
+      operationId: createBooking
+      security: [{ supabaseAuth: [] }]
+      description: |
+        The server derives renter_id, reads the current tool price, validates
+        the tool and date range, checks overlaps, calculates rental days and
+        total price, then creates a PENDING booking.
+        Conflict rule: newStart < existingEnd AND newEnd > existingStart.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/CreateBookingRequest' }
+      responses:
+        '201':
+          description: Booking request created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data: { $ref: '#/components/schemas/Booking' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '404': { $ref: '#/components/responses/NotFound' }
+        '409':
+          description: Requested dates overlap a blocking booking.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/Error' }
+        '500': { $ref: '#/components/responses/ServerError' }
+  /api/bookings/me:
+    get:
+      tags: [Bookings]
+      summary: List the current user's bookings
+      operationId: listMyBookings
+      security: [{ supabaseAuth: [] }]
+      responses:
+        '200':
+          description: Bookings requested by or received by the current user.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [data]
+                properties:
+                  data:
+                    type: array
+                    items: { $ref: '#/components/schemas/Booking' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+  /api/bookings/{bookingId}:
+    parameters:
+      - $ref: '#/components/parameters/BookingId'
+    patch:
+      tags: [Bookings]
+      summary: Approve, reject, or cancel a booking
+      operationId: updateBookingStatus
+      security: [{ supabaseAuth: [] }]
+      description: Owners may approve or reject PENDING requests. Renters may cancel their own requests.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [status]
+              properties:
+                status:
+                  type: string
+                  enum: [APPROVED, REJECTED, CANCELLED]
+      responses:
+        '200':
+          description: Booking status updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data: { $ref: '#/components/schemas/Booking' }
+        '400': { $ref: '#/components/responses/ValidationError' }
+        '401': { $ref: '#/components/responses/Unauthorized' }
+        '403': { $ref: '#/components/responses/Forbidden' }
+        '404': { $ref: '#/components/responses/NotFound' }
+components:
+  securitySchemes:
+    supabaseAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Supabase Auth access token.
+  parameters:
+    ToolId:
+      name: toolId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+    BookingId:
+      name: bookingId
+      in: path
+      required: true
+      schema: { type: string, format: uuid }
+  schemas:
+    ProfileSummary:
+      type: object
+      required: [id, name]
+      properties:
+        id: { type: string, format: uuid }
+        name: { type: string }
+    Tool:
+      type: object
+      required: [id, owner_id, name, description, category, price_per_day, location, status, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        owner_id: { type: string, format: uuid }
+        name: { type: string, example: Cordless Drill }
+        description: { type: string }
+        category: { type: string, example: Drills }
+        price_per_day: { type: number, format: double, example: 15.00 }
+        location: { type: string, example: Bengaluru }
+        image_url: { type: string, format: uri, nullable: true }
+        status:
+          type: string
+          enum: [ACTIVE, PAUSED, DAMAGED, REMOVED]
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    ToolDetails:
+      allOf:
+        - $ref: '#/components/schemas/Tool'
+        - type: object
+          required: [owner]
+          properties:
+            owner: { $ref: '#/components/schemas/ProfileSummary' }
+    CreateToolRequest:
+      type: object
+      required: [name, description, category, price_per_day, location]
+      properties:
+        name: { type: string, minLength: 1, maxLength: 160 }
+        description: { type: string, maxLength: 5000 }
+        category: { type: string, minLength: 1, maxLength: 80 }
+        price_per_day: { type: number, exclusiveMinimum: 0, example: 15.00 }
+        location: { type: string, minLength: 1, maxLength: 160 }
+        image_url: { type: string, format: uri, nullable: true }
+    UpdateToolRequest:
+      allOf:
+        - $ref: '#/components/schemas/CreateToolRequest'
+        - type: object
+          properties:
+            status:
+              type: string
+              enum: [ACTIVE, PAUSED, DAMAGED, REMOVED]
+    CreateBookingRequest:
+      type: object
+      required: [tool_id, start_date, end_date]
+      properties:
+        tool_id: { type: string, format: uuid }
+        start_date: { type: string, format: date, example: '2026-08-10' }
+        end_date: { type: string, format: date, example: '2026-08-14' }
+      example:
+        tool_id: 00000000-0000-0000-0000-000000000000
+        start_date: '2026-08-10'
+        end_date: '2026-08-14'
+    Booking:
+      type: object
+      required: [id, tool_id, renter_id, start_date, end_date, price_per_day_at_booking, total_price, status, created_at, updated_at]
+      properties:
+        id: { type: string, format: uuid }
+        tool_id: { type: string, format: uuid }
+        renter_id: { type: string, format: uuid }
+        start_date: { type: string, format: date }
+        end_date: { type: string, format: date }
+        price_per_day_at_booking: { type: number, format: double }
+        total_price: { type: number, format: double }
+        status:
+          type: string
+          enum: [PENDING, APPROVED, REJECTED, CANCELLED, ACTIVE, COMPLETED]
+        created_at: { type: string, format: date-time }
+        updated_at: { type: string, format: date-time }
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error: { type: string, example: Requested dates are unavailable }
+        code: { type: string, example: BOOKING_CONFLICT }
+  responses:
+    ValidationError:
+      description: Invalid request data or business rule violation.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Unauthorized:
+      description: A valid Supabase access token is required.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    Forbidden:
+      description: Authenticated user is not allowed to perform this action.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    NotFound:
+      description: Requested resource does not exist.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+    ServerError:
+      description: Unexpected server or database failure.
+      content:
+        application/json:
+          schema: { $ref: '#/components/schemas/Error' }
+
