@@ -63,6 +63,7 @@ app/
   api/bookings/me/route.ts
   api/bookings/[bookingId]/route.ts
   api-docs/page.tsx                # Swagger UI
+proxy.ts                            # Supabase session refresh for Next.js 16
 components/
 lib/
   db.ts

@@ -1,6 +1,6 @@
 openapi: 3.0.3
 info:
-  title: Tool Rental Marketplace API
+  title: Toolspace API
   version: 1.0.0
   description: |
     API-first contract for the peer-to-peer power-tool rental marketplace.
@@ -322,4 +322,3 @@ components:
       content:
         application/json:
           schema: { $ref: '#/components/schemas/Error' }
-

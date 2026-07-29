@@ -1,0 +1,13 @@
+'use client'
+
+import { FormEvent, useState } from 'react'
+import Link from 'next/link'
+import { TOOL_CATEGORIES } from '@/lib/validation'
+import { CheckCircle2, IndianRupee, MapPin, Plus, Upload } from 'lucide-react'
+
+export function ToolForm() {
+  const [message, setMessage] = useState(''); const [createdTool, setCreatedTool] = useState<{ id: string } | null>(null); const [saving, setSaving] = useState(false)
+  async function submit(event: FormEvent<HTMLFormElement>) { event.preventDefault(); setSaving(true); setMessage(''); const form = new FormData(event.currentTarget); try { const response = await fetch('/api/tools', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(Object.fromEntries(form)) }); const body = await response.json(); if (!response.ok) throw new Error(body.error ?? 'Could not create listing'); setCreatedTool(body.data); event.currentTarget.reset() } catch (error) { setMessage(error instanceof Error ? error.message : 'Could not create listing') } finally { setSaving(false) } }
+  if (createdTool) return <div className="form-card"><div className="success-message"><CheckCircle2 size={19} /><span><strong>Your tool is live.</strong><br />Renters can now find your listing in the marketplace.</span></div><div className="nav-links"><Link className="button" href={`/tools/${createdTool.id}`}>View listing</Link><Link className="button secondary" href="/">Browse marketplace</Link></div></div>
+  return <form className="form-card" onSubmit={submit}><div className="step-label">STEP 1 OF 1 · ADD YOUR TOOL</div><label>Tool name<input name="name" placeholder="e.g. Cordless drill" required maxLength={160} /></label><label>Description<textarea name="description" placeholder="What is included? What condition is it in?" required maxLength={5000} /></label><div className="form-row"><label>Category<select name="category" defaultValue="" required><option value="" disabled>Select a category</option>{TOOL_CATEGORIES.map((category) => <option key={category} value={category}>{category}</option>)}</select></label><label><span><IndianRupee size={14} /> Price per day</span><input name="price_per_day" type="number" min="0.01" max="100000" step="0.01" placeholder="500" required /></label></div><label><span><MapPin size={14} /> Location</span><input name="location" placeholder="Neighborhood, city or pincode" required maxLength={160} /></label><label><span><Upload size={14} /> Image URL <small className="muted">(optional)</small></span><input name="image_url" type="url" placeholder="https://..." /></label>{message && <div className="form-message">{message}</div>}<button className="button" disabled={saving}>{saving ? 'Publishing…' : <><Plus size={17} /> Publish listing</>}</button></form>
+}

@@ -3,15 +3,46 @@
 
 create extension if not exists pgcrypto;
 
-create type public.tool_status as enum ('ACTIVE', 'PAUSED', 'DAMAGED', 'REMOVED');
-create type public.booking_status as enum (
-  'PENDING',
-  'APPROVED',
-  'REJECTED',
-  'CANCELLED',
-  'ACTIVE',
-  'COMPLETED'
-);
+do $$
+begin
+  if not exists (
+    select 1 from pg_type t
+    join pg_namespace n on n.oid = t.typnamespace
+    where t.typname = 'tool_status' and n.nspname = 'public'
+  ) then
+    create type public.tool_status as enum ('ACTIVE', 'PAUSED', 'DAMAGED', 'REMOVED');
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_type t
+    join pg_namespace n on n.oid = t.typnamespace
+    where t.typname = 'tool_category' and n.nspname = 'public'
+  ) then
+    create type public.tool_category as enum (
+      'Drills', 'Saws', 'Sanders', 'Grinders', 'Planers', 'Nail Guns',
+      'Pressure Washers', 'Other'
+    );
+  end if;
+end
+$$;
+
+do $$
+begin
+  if not exists (
+    select 1 from pg_type t
+    join pg_namespace n on n.oid = t.typnamespace
+    where t.typname = 'booking_status' and n.nspname = 'public'
+  ) then
+    create type public.booking_status as enum (
+      'PENDING', 'APPROVED', 'REJECTED', 'CANCELLED', 'ACTIVE', 'COMPLETED'
+    );
+  end if;
+end
+$$;
 
 -- Application profile linked to Supabase Auth.
 create table public.profiles (
@@ -26,7 +57,7 @@ create table public.tools (
   owner_id uuid not null references public.profiles(id) on delete cascade,
   name text not null check (char_length(trim(name)) between 1 and 160),
   description text not null default '',
-  category text not null check (char_length(trim(category)) between 1 and 80),
+  category public.tool_category not null,
   price_per_day numeric(10, 2) not null check (price_per_day > 0),
   location text not null check (char_length(trim(location)) between 1 and 160),
   image_url text,
@@ -172,6 +203,12 @@ create policy "Users can view their own profile"
 on public.profiles for select
 to authenticated
 using (id = (select auth.uid()));
+
+-- Owner names are displayed on tool details. The application only selects
+-- id/name for this use; keep private profile fields out of client queries.
+create or replace view public.profile_summaries as
+select id, name
+from public.profiles;
 
 create policy "Users can update their own profile"
 on public.profiles for update
