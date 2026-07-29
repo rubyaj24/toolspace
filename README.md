@@ -72,6 +72,52 @@ A rental request for a tool. Dates use the half-open range `[start_date, end_dat
 
 `PENDING` and `APPROVED` bookings block availability. Adjacent periods such as August 10–14 and August 14–18 do not overlap.
 
+### Database relationship diagram
+
+```mermaid
+erDiagram
+  AUTH_USERS ||--|| PROFILES : "has profile"
+  PROFILES ||--o{ TOOLS : owns
+  PROFILES ||--o{ BOOKINGS : rents
+  TOOLS ||--o{ BOOKINGS : receives
+
+  AUTH_USERS {
+    uuid id PK
+  }
+
+  PROFILES {
+    uuid id PK
+    text name
+    text email
+    timestamptz created_at
+  }
+
+  TOOLS {
+    uuid id PK
+    uuid owner_id FK
+    text name
+    tool_category category
+    numeric price_per_day
+    text location
+    tool_status status
+    timestamptz created_at
+  }
+
+  BOOKINGS {
+    uuid id PK
+    uuid tool_id FK
+    uuid renter_id FK
+    date start_date
+    date end_date
+    numeric price_per_day_at_booking
+    numeric total_price
+    booking_status status
+    timestamptz created_at
+  }
+```
+
+`PROFILES.id` references Supabase `auth.users.id`. `TOOLS.owner_id` references the profile that listed the tool. `BOOKINGS.renter_id` references the user requesting a rental, while `BOOKINGS.tool_id` identifies the listed tool.
+
 ## User journeys
 
 ### First-time renter
@@ -222,7 +268,10 @@ The VS Code Supabase MCP configuration is in [.vscode/mcp.json](./.vscode/mcp.js
 ```bash
 npx tsc --noEmit
 npm run build
+npm test
 npm audit --omit=dev --audit-level=high
 ```
+
+The unit tests are in `lib/booking.test.ts` and cover date overlap, half-open rental days, self-rental, inactive tools, invalid dates, and successful booking validation.
 
 Production improvement: availability checking and booking insertion should be atomic in a transaction or protected with a PostgreSQL date-range exclusion strategy.
